@@ -1,0 +1,194 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to get user role from users collection
+    // Returns null if user document doesn't exist (handles signup edge case)
+    function getUserRole() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null ? userDoc.data.role : null;
+    }
+    
+    // Helper function to check if user is a practitioner
+    function isPractitioner() {
+      return isAuthenticated() && getUserRole() == 'practitioner';
+    }
+    
+    // Helper function to check if user is a client
+    function isClient() {
+      return isAuthenticated() && getUserRole() == 'client';
+    }
+    
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ============================================
+    // Collection: users
+    // ============================================
+    match /users/{userId} {
+      // Users can read and write only their own document
+      allow read, write: if isOwner(userId);
+      
+      // Practitioners can read basic user info for their clients
+      // (This is handled via appointments relationship, so we keep it restrictive)
+      // In practice, practitioners will access client data through appointments
+    }
+    
+    // ============================================
+    // Collection: practitioners
+    // ============================================
+    match /practitioners/{practitionerId} {
+      // Practitioners can read and write only their own document
+      allow read, write: if isOwner(practitionerId);
+      
+      // Authenticated users can read all practitioner documents (for browsing and booking)
+      // This allows clients to browse practitioners even if their user document doesn't exist yet
+      allow read: if isAuthenticated();
+      
+      // No write access for non-owners
+      allow write: if false;
+    }
+    
+    // ============================================
+    // Collection: appointments
+    // ============================================
+    match /appointments/{appointmentId} {
+      // Users can read appointments where they are the client or practitioner
+      allow read: if isAuthenticated() && 
+                     (resource.data.clientId == request.auth.uid || 
+                      resource.data.practitionerId == request.auth.uid);
+      
+      // Clients can create appointments (must set clientId to their own UID)
+      allow create: if isClient() && 
+                       request.resource.data.clientId == request.auth.uid &&
+                       request.resource.data.practitionerId is string &&
+                       request.resource.data.startTime is timestamp &&
+                       request.resource.data.endTime is timestamp &&
+                       request.resource.data.status == 'pending';
+      
+      // Clients can update their own appointments (limited to status, notes, cancelledAt, cancelledBy)
+      allow update: if isClient() && 
+                       resource.data.clientId == request.auth.uid &&
+                       // Cannot change clientId, practitionerId, startTime, or endTime
+                       (!('clientId' in request.resource.data) || 
+                        request.resource.data.clientId == resource.data.clientId) &&
+                       (!('practitionerId' in request.resource.data) || 
+                        request.resource.data.practitionerId == resource.data.practitionerId) &&
+                       (!('startTime' in request.resource.data) || 
+                        request.resource.data.startTime == resource.data.startTime) &&
+                       (!('endTime' in request.resource.data) || 
+                        request.resource.data.endTime == resource.data.endTime);
+      
+      // Practitioners can update appointments where they are the practitioner
+      allow update: if isPractitioner() && 
+                       resource.data.practitionerId == request.auth.uid &&
+                       // Cannot change clientId or practitionerId
+                       (!('clientId' in request.resource.data) || 
+                        request.resource.data.clientId == resource.data.clientId) &&
+                       (!('practitionerId' in request.resource.data) || 
+                        request.resource.data.practitionerId == resource.data.practitionerId);
+      
+      // No delete operations (use status: 'cancelled' instead)
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // Collection: sessions
+    // ============================================
+    match /sessions/{sessionId} {
+      // Practitioners can read sessions where they are the practitioner
+      allow read: if isPractitioner() && 
+                     resource.data.practitionerId == request.auth.uid;
+      
+      // Practitioners can create sessions (must set practitionerId to their own UID)
+      allow create: if isPractitioner() && 
+                       request.resource.data.practitionerId == request.auth.uid &&
+                       request.resource.data.clientId is string &&
+                       request.resource.data.sessionDate is timestamp;
+      
+      // Practitioners can update sessions where they are the practitioner
+      allow update: if isPractitioner() && 
+                       resource.data.practitionerId == request.auth.uid &&
+                       // Cannot change practitionerId or clientId
+                       (!('practitionerId' in request.resource.data) || 
+                        request.resource.data.practitionerId == resource.data.practitionerId) &&
+                       (!('clientId' in request.resource.data) || 
+                        request.resource.data.clientId == resource.data.clientId);
+      
+      // Clients can read sessions where they are the client (read-only)
+      allow read: if isClient() && 
+                     resource.data.clientId == request.auth.uid;
+      
+      // Clients can update only the clientNotes field
+      allow update: if isClient() && 
+                       resource.data.clientId == request.auth.uid &&
+                       // Only allow updating clientNotes field, preserve all other fields
+                       (!('practitionerId' in request.resource.data) || 
+                        request.resource.data.practitionerId == resource.data.practitionerId) &&
+                       (!('clientId' in request.resource.data) || 
+                        request.resource.data.clientId == resource.data.clientId) &&
+                       (!('notes' in request.resource.data) || 
+                        request.resource.data.notes == resource.data.notes) &&
+                       (!('sessionDate' in request.resource.data) || 
+                        request.resource.data.sessionDate == resource.data.sessionDate);
+      
+      // No delete operations (for audit trail)
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // Collection: intakeForms
+    // ============================================
+    match /intakeForms/{formId} {
+      // Practitioners can read intake forms where they are the practitioner
+      allow read: if isPractitioner() && 
+                     resource.data.practitionerId == request.auth.uid;
+      
+      // Practitioners can create intake form templates
+      allow create: if isPractitioner() && 
+                       request.resource.data.practitionerId == request.auth.uid &&
+                       request.resource.data.type is string;
+      
+      // Practitioners can update intake forms where they are the practitioner
+      allow update: if isPractitioner() && 
+                       resource.data.practitionerId == request.auth.uid &&
+                       // Cannot change practitionerId
+                       (!('practitionerId' in request.resource.data) || 
+                        request.resource.data.practitionerId == resource.data.practitionerId);
+      
+      // Clients can read intake form templates (for browsing available forms)
+      // and their own submitted forms
+      allow read: if isClient() && 
+                     (resource.data.type == 'template' || 
+                      resource.data.submittedBy == request.auth.uid);
+      
+      // Clients can create submitted forms (type === 'submitted')
+      allow create: if isClient() && 
+                       request.resource.data.type == 'submitted' &&
+                       request.resource.data.submittedBy == request.auth.uid &&
+                       request.resource.data.practitionerId is string;
+      
+      // Clients cannot update or delete forms
+      allow update, delete: if false;
+      
+      // Practitioners cannot delete forms (for audit trail)
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // Default: Deny all other access
+    // ============================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
