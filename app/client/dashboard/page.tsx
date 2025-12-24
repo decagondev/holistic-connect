@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppointments } from '@/hooks/firestore/useAppointments';
-import { Calendar, Clock, MapPin, Search, Plus } from 'lucide-react';
+import { Calendar, Clock, MapPin, Search, Plus, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 
@@ -172,11 +172,30 @@ function ClientDashboardContent() {
                           </Badge>
                         </div>
                       </CardHeader>
-                      {appointment.notes && (
-                        <CardContent>
+                      <CardContent className="space-y-3">
+                        {appointment.notes && (
                           <p className="text-sm text-muted-foreground">{appointment.notes}</p>
-                        </CardContent>
-                      )}
+                        )}
+                        {appointment.meetingLink && appointment.status !== 'cancelled' && (
+                          <div className={appointment.notes ? "pt-2 border-t" : ""}>
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              <a
+                                href={appointment.meetingLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Video className="h-4 w-4 mr-2" />
+                                {appointment.status === 'confirmed' ? 'Join Google Meet' : 'View Meeting Link'}
+                              </a>
+                            </Button>
+                          </div>
+                        )}
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
@@ -207,6 +226,25 @@ function ClientDashboardContent() {
                           </Badge>
                         </div>
                       </CardHeader>
+                      {appointment.meetingLink && appointment.status === 'completed' && (
+                        <CardContent>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                          >
+                            <a
+                              href={appointment.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              View Meeting Link
+                            </a>
+                          </Button>
+                        </CardContent>
+                      )}
                     </Card>
                   ))}
                 </div>

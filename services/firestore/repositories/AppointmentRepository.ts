@@ -53,6 +53,22 @@ export class AppointmentRepository implements IAppointmentRepository {
     const appointmentsRef = collection(this.firestore, this.collectionName);
     const now = serverTimestamp();
 
+    // Generate Google Meet link for the appointment
+    // Format: https://meet.google.com/xxx-xxxx-xxx (12 characters, 3 groups)
+    const generateMeetingCode = () => {
+      const chars = 'abcdefghijklmnopqrstuvwxyz';
+      const groups = [];
+      for (let i = 0; i < 3; i++) {
+        let group = '';
+        for (let j = 0; j < (i === 0 ? 3 : 4); j++) {
+          group += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        groups.push(group);
+      }
+      return groups.join('-');
+    };
+    const meetingLink = `https://meet.google.com/${generateMeetingCode()}`;
+
     const appointmentData: Omit<AppointmentDocument, 'id'> = {
       clientId: input.clientId,
       practitionerId: input.practitionerId,
@@ -64,6 +80,7 @@ export class AppointmentRepository implements IAppointmentRepository {
       notes: input.notes ?? null,
       reminderSent: false,
       intakeFormCompleted: false,
+      meetingLink,
     };
 
     const docRef = await addDoc(appointmentsRef, appointmentData);

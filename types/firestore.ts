@@ -96,6 +96,7 @@ export interface AppointmentDocument {
   sessionId?: string | null;
   paymentStatus?: PaymentStatus | null;
   paymentIntentId?: string | null;
+  meetingLink?: string | null;
 }
 
 /**
@@ -275,5 +276,6 @@ export interface UpdateAppointmentInput {
   sessionId?: string | null;
   paymentStatus?: PaymentStatus | null;
   paymentIntentId?: string | null;
+  meetingLink?: string | null;
 }
 
