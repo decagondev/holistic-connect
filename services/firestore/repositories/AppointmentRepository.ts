@@ -53,21 +53,21 @@ export class AppointmentRepository implements IAppointmentRepository {
     const appointmentsRef = collection(this.firestore, this.collectionName);
     const now = serverTimestamp();
 
-    // Generate Google Meet link for the appointment
-    // Format: https://meet.google.com/xxx-xxxx-xxx (12 characters, 3 groups)
-    const generateMeetingCode = () => {
-      const chars = 'abcdefghijklmnopqrstuvwxyz';
-      const groups = [];
-      for (let i = 0; i < 3; i++) {
-        let group = '';
-        for (let j = 0; j < (i === 0 ? 3 : 4); j++) {
-          group += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        groups.push(group);
+    // Generate Jitsi Meet link for the appointment
+    // Jitsi allows random room names and works immediately without API setup
+    // Format: https://meet.jit.si/RoomName (room name can be any string)
+    const generateRoomName = () => {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      let roomName = '';
+      // Generate a random room name (12-15 characters)
+      const length = 12 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < length; i++) {
+        roomName += chars.charAt(Math.floor(Math.random() * chars.length));
       }
-      return groups.join('-');
+      // Add appointment ID prefix for uniqueness
+      return `holistic-${roomName}`;
     };
-    const meetingLink = `https://meet.google.com/${generateMeetingCode()}`;
+    const meetingLink = `https://meet.jit.si/${generateRoomName()}`;
 
     const appointmentData: Omit<AppointmentDocument, 'id'> = {
       clientId: input.clientId,

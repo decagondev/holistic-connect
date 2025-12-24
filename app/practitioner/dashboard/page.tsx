@@ -182,7 +182,7 @@ function PractitionerDashboardContent() {
                                 rel="noopener noreferrer"
                               >
                                 <Video className="h-4 w-4 mr-2" />
-                                {appointment.status === 'confirmed' ? 'Join Google Meet' : 'View Meeting Link'}
+                                {appointment.status === 'confirmed' ? 'Join Video Meeting' : 'View Meeting Link'}
                               </a>
                             </Button>
                           </div>

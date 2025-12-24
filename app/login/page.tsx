@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, Suspense } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -18,6 +18,7 @@ import { Mail, Lock, Eye, EyeOff } from "lucide-react"
 import { useSignIn } from "@/hooks/auth/useSignIn"
 import { useSignInWithGoogle } from "@/hooks/auth/useSignInWithGoogle"
 import { useRouter } from "next/navigation"
+import { Spinner } from "@/components/ui/spinner"
 
 /**
  * Login form schema
@@ -29,7 +30,7 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>
 
-export default function LoginPage() {
+function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -236,6 +237,25 @@ export default function LoginPage() {
 
       <Footer />
     </main>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex flex-col">
+        <Header />
+        <section className="flex-1 flex items-center justify-center py-20">
+          <div className="flex flex-col items-center gap-4">
+            <Spinner className="h-8 w-8" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </section>
+        <Footer />
+      </main>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
 
