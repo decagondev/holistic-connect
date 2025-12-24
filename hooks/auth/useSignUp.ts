@@ -13,6 +13,8 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { userRepository } from '@/services/firestore/repositories/UserRepository';
+import { practitionerRepository } from '@/services/firestore/repositories/PractitionerRepository';
 import type { UserRole } from '@/types/auth';
 
 /**
@@ -59,9 +61,37 @@ export function useSignUp(): UseSignUpReturn {
         await updateProfile(user, { displayName });
       }
 
-      // TODO: In Epic 4, create user document in Firestore with role
-      // For now, we'll just show success and redirect
-      // The Firestore user document creation will be handled in Epic 4
+      // Create user profile in Firestore
+      try {
+        await userRepository.createUserProfile({
+          uid: user.uid,
+          email: user.email!,
+          role,
+          displayName: displayName || null,
+          photoURL: user.photoURL || null,
+          emailVerified: user.emailVerified,
+        });
+
+        // If practitioner, create practitioner profile
+        if (role === 'practitioner') {
+          try {
+            await practitionerRepository.createPractitionerProfile({
+              uid: user.uid,
+              email: user.email!,
+              displayName: displayName || user.email!.split('@')[0],
+              photoURL: user.photoURL || null,
+            });
+          } catch (practitionerError) {
+            // Log error but don't fail signup if practitioner profile creation fails
+            console.error('Failed to create practitioner profile:', practitionerError);
+            toast.warning('Account created, but practitioner profile setup failed. Please complete your profile later.');
+          }
+        }
+      } catch (profileError) {
+        // Log error but don't fail signup if profile creation fails
+        console.error('Failed to create user profile:', profileError);
+        toast.warning('Account created, but profile setup failed. Please complete your profile later.');
+      }
 
       // Send email verification
       try {
