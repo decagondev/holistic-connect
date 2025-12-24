@@ -11,6 +11,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/hooks/firestore/useUser';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -23,20 +24,24 @@ export default function DashboardPage() {
 }
 
 function DashboardRedirect() {
-  const { user, role, loading } = useAuth();
+  const { user: authUser, loading: authLoading } = useAuth();
+  const { user: userDoc, loading: userLoading } = useUser();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user) {
+    // Wait for both auth and user document to load
+    if (!authLoading && !userLoading && authUser) {
+      // Use role from user document (more reliable than AuthContext which defaults to 'client')
+      const role = userDoc?.role || 'client';
+      
       // Redirect based on role
       if (role === 'practitioner') {
         router.replace('/practitioner/dashboard');
       } else {
-        // Default to client dashboard (including if role is null/undefined)
         router.replace('/client/dashboard');
       }
     }
-  }, [user, role, loading, router]);
+  }, [authUser, userDoc, authLoading, userLoading, router]);
 
   // Show loading state while determining redirect
   return (

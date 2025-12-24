@@ -7,6 +7,7 @@
 
 'use client';
 
+import { useState } from 'react';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,15 +15,71 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
 import { usePractitioner } from '@/hooks/firestore/usePractitioner';
-import { useParams } from 'next/navigation';
+import { useCreateAppointment } from '@/hooks/firestore/useCreateAppointment';
+import { useAuth } from '@/hooks/useAuth';
+import { useParams, useRouter } from 'next/navigation';
 import { MapPin, Clock, DollarSign, CheckCircle2 } from 'lucide-react';
 import { RequireAuth } from '@/components/auth/RequireAuth';
+import { Timestamp } from 'firebase/firestore';
+import { addMinutes } from 'date-fns';
 
 export default function PractitionerProfilePage() {
   const params = useParams();
   const practitionerId = params.id as string;
   const { practitioner, loading, error } = usePractitioner(practitionerId);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [notes, setNotes] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const { createAppointment, loading: creating } = useCreateAppointment();
+  const router = useRouter();
+
+  // Generate time slots (every 30 minutes from 9 AM to 5 PM)
+  const timeSlots = [];
+  for (let hour = 9; hour < 17; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      timeSlots.push(timeString);
+    }
+  }
+
+  const handleBookAppointment = async () => {
+    if (!user || !practitioner || !selectedDate || !selectedTime) {
+      return;
+    }
+
+    // Combine date and time
+    const [hours, minutes] = selectedTime.split(':').map(Number);
+    const startTime = new Date(selectedDate);
+    startTime.setHours(hours, minutes, 0, 0);
+    
+    // Calculate end time based on session duration
+    const endTime = addMinutes(startTime, practitioner.sessionDuration);
+
+    const appointment = await createAppointment({
+      clientId: user.uid,
+      practitionerId: practitioner.uid,
+      startTime: Timestamp.fromDate(startTime),
+      endTime: Timestamp.fromDate(endTime),
+      notes: notes || null,
+    });
+
+    if (appointment) {
+      setDialogOpen(false);
+      // Reset form
+      setSelectedDate(undefined);
+      setSelectedTime('');
+      setNotes('');
+      // Redirect to dashboard to see the appointment
+      router.push('/dashboard');
+    }
+  };
 
   if (error) {
     return (
@@ -157,9 +214,81 @@ export default function PractitionerProfilePage() {
                 </div>
 
                 <RequireAuth>
-                  <Button size="lg" className="w-full">
-                    Book Appointment
-                  </Button>
+                  <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="lg" className="w-full">
+                        Book Appointment
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>Book Appointment</DialogTitle>
+                        <DialogDescription>
+                          Select a date and time for your appointment with {practitioner?.displayName}
+                        </DialogDescription>
+                      </DialogHeader>
+                      
+                      <div className="space-y-4 py-4">
+                        <div>
+                          <Label>Select Date</Label>
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={setSelectedDate}
+                            disabled={(date) => date < new Date()}
+                            className="rounded-md border mt-2"
+                          />
+                        </div>
+
+                        {selectedDate && (
+                          <div>
+                            <Label>Select Time</Label>
+                            <div className="grid grid-cols-4 gap-2 mt-2 max-h-48 overflow-y-auto">
+                              {timeSlots.map((time) => (
+                                <Button
+                                  key={time}
+                                  type="button"
+                                  variant={selectedTime === time ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => setSelectedTime(time)}
+                                >
+                                  {time}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <Label htmlFor="notes">Notes (Optional)</Label>
+                          <Textarea
+                            id="notes"
+                            placeholder="Any additional information for the practitioner..."
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            className="mt-2"
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-4">
+                          <Button
+                            variant="outline"
+                            onClick={() => setDialogOpen(false)}
+                            disabled={creating}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleBookAppointment}
+                            disabled={!selectedDate || !selectedTime || creating}
+                          >
+                            {creating ? 'Booking...' : 'Confirm Booking'}
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </RequireAuth>
               </CardContent>
             </Card>
