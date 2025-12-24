@@ -104,7 +104,8 @@ export function useSignUp(): UseSignUpReturn {
         toast.success('Account created successfully!');
       }
       
-      router.push('/'); // Redirect to home or dashboard
+      // Redirect to general dashboard which will route based on role
+      router.push('/dashboard');
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       let errorMessage = 'Failed to create account. Please try again.';

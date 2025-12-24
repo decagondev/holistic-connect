@@ -17,6 +17,9 @@ import {
   sendEmailVerification as firebaseSendEmailVerification,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
+import { userRepository } from '@/services/firestore/repositories/UserRepository';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/client';
 import type { AppUser, AuthState, UserRole } from '@/types/auth';
 
 /**
@@ -136,14 +139,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // Cast to AppUser - role will be fetched from Firestore in Epic 4
+        // Cast to AppUser
         const appUser = firebaseUser as AppUser;
         setUser(appUser);
         
-        // TODO: In Epic 4, fetch role from Firestore user document
-        // For now, role will be set during signup and stored in Firestore
-        // We'll fetch it in Epic 4 when we implement Firestore services
-        setRole(null); // Will be populated from Firestore in Epic 4
+        // Fetch role from Firestore user document
+        try {
+          const userDoc = await userRepository.getUser(firebaseUser.uid);
+          if (userDoc) {
+            // If user has a role, use it; otherwise default to 'client' for legacy users
+            if (userDoc.role) {
+              setRole(userDoc.role);
+            } else {
+              // Legacy user without role - default to 'client' and update document
+              setRole('client');
+              // Try to update the user document with default role (don't fail if this fails)
+              try {
+                const userRef = doc(db, 'users', firebaseUser.uid);
+                await updateDoc(userRef, { role: 'client' });
+              } catch (updateError) {
+                console.warn('Failed to update legacy user role:', updateError);
+                // Continue anyway - role is set in state
+              }
+            }
+          } else {
+            // If no user document exists, default to 'client' (shouldn't happen after sign-in)
+            setRole('client');
+          }
+        } catch (error: any) {
+          // Handle offline errors gracefully
+          if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
+            console.warn('Firestore is offline, defaulting to client role');
+            setRole('client');
+          } else {
+            console.error('Failed to fetch user role from Firestore:', error);
+            // Default to 'client' on error to prevent blocking the user
+            setRole('client');
+          }
+        }
       } else {
         setUser(null);
         setRole(null);

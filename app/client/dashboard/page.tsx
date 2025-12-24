@@ -16,8 +16,9 @@ import { Badge } from '@/components/ui/badge';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppointments } from '@/hooks/firestore/useAppointments';
-import { Calendar, Clock, MapPin } from 'lucide-react';
+import { Calendar, Clock, MapPin, Search, Plus } from 'lucide-react';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 export default function ClientDashboardPage() {
   return (
@@ -36,12 +37,15 @@ function ClientDashboardContent() {
 
   // Separate upcoming and past appointments
   const now = new Date();
-  const upcoming = appointments.filter(
-    (apt) => apt.startTime.toDate() >= now && apt.status !== 'cancelled'
-  );
-  const past = appointments.filter(
-    (apt) => apt.startTime.toDate() < now || apt.status === 'cancelled'
-  );
+  const upcoming = appointments
+    .filter((apt) => apt.startTime.toDate() >= now && apt.status !== 'cancelled')
+    .sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
+  const past = appointments
+    .filter((apt) => apt.startTime.toDate() < now || apt.status === 'cancelled')
+    .sort((a, b) => b.startTime.toMillis() - a.startTime.toMillis());
+  
+  const confirmed = upcoming.filter((apt) => apt.status === 'confirmed');
+  const pending = upcoming.filter((apt) => apt.status === 'pending');
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -63,9 +67,17 @@ function ClientDashboardContent() {
       <Header />
 
       <div className="container mx-auto px-4 py-12">
-        <div className="mb-8">
-          <h1 className="text-4xl font-serif font-bold mb-2">Dashboard</h1>
-          <p className="text-muted-foreground">Manage your appointments and sessions</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-serif font-bold mb-2">Dashboard</h1>
+            <p className="text-muted-foreground">Manage your appointments and sessions</p>
+          </div>
+          <Button asChild>
+            <Link href="/practitioners/browse">
+              <Plus className="h-4 w-4 mr-2" />
+              Book Appointment
+            </Link>
+          </Button>
         </div>
 
         {loading ? (
@@ -82,6 +94,45 @@ function ClientDashboardContent() {
           </div>
         ) : (
           <div className="space-y-8">
+            {/* Stats Cards */}
+            <div className="grid md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Upcoming
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{upcoming.length}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Confirmed
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{confirmed.length}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Pending
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{pending.length}</div>
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Upcoming Appointments */}
             <div>
               <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
@@ -90,8 +141,14 @@ function ClientDashboardContent() {
               </h2>
               {upcoming.length === 0 ? (
                 <Card>
-                  <CardContent className="p-6 text-center text-muted-foreground">
-                    No upcoming appointments. Book one to get started!
+                  <CardContent className="p-6 text-center">
+                    <p className="text-muted-foreground mb-4">No upcoming appointments.</p>
+                    <Button asChild>
+                      <Link href="/practitioners/browse">
+                        <Search className="h-4 w-4 mr-2" />
+                        Browse Practitioners
+                      </Link>
+                    </Button>
                   </CardContent>
                 </Card>
               ) : (

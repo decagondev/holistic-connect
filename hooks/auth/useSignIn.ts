@@ -12,6 +12,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { userRepository } from '@/services/firestore/repositories/UserRepository';
 
 /**
  * Hook return type
@@ -48,7 +49,7 @@ export function useSignIn(): UseSignInReturn {
     setError(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       toast.success('Signed in successfully');
       
       // Check for redirect parameter in URL
@@ -56,8 +57,25 @@ export function useSignIn(): UseSignInReturn {
         ? new URLSearchParams(window.location.search).get('redirect')
         : null;
       
-      // Redirect to specified path or default to home
-      router.push(redirectParam || '/');
+      // If redirect param exists, use it; otherwise redirect based on role
+      if (redirectParam) {
+        router.push(redirectParam);
+      } else {
+        // Fetch user role to determine dashboard
+        try {
+          const userDoc = await userRepository.getUser(userCredential.user.uid);
+          // Redirect to general dashboard which will route based on role
+          router.push('/dashboard');
+        } catch (error: any) {
+          // Handle offline errors or other errors - default to client dashboard
+          if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
+            console.warn('Firestore is offline, redirecting to client dashboard');
+          } else {
+            console.error('Failed to fetch user role:', error);
+          }
+          router.push('/client/dashboard');
+        }
+      }
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       let errorMessage = 'Failed to sign in. Please try again.';
