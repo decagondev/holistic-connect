@@ -5,13 +5,42 @@ import Link from "next/link"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/useAuth"
+import { useSignOut } from "@/hooks/auth/useSignOut"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { LogOut, User as UserIcon, Settings } from "lucide-react"
 
 export function Header() {
   const pathname = usePathname()
+  const { user, loading } = useAuth()
+  const { signOut, loading: signOutLoading } = useSignOut()
 
   const isActiveLink = (href: string) => {
     if (href.startsWith("#")) return false // Hash links are never "active" in terms of page
     return pathname === href
+  }
+
+  const getUserInitials = () => {
+    if (user?.displayName) {
+      return user.displayName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase()
+    }
+    return "U"
   }
 
   return (
@@ -79,12 +108,66 @@ export function Header() {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/login">Log in</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link href="/signup">Get Started</Link>
-            </Button>
+            {loading ? (
+              // Show loading state while checking auth
+              <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
+            ) : user ? (
+              // Show user menu when logged in
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || "User"} />
+                      <AvatarFallback>{getUserInitials()}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {user.displayName || "User"}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard" className="flex items-center">
+                      <UserIcon className="mr-2 h-4 w-4" />
+                      <span>Dashboard</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings" className="flex items-center">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => signOut()}
+                    disabled={signOutLoading}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>{signOutLoading ? "Signing out..." : "Sign out"}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              // Show login/signup buttons when not logged in
+              <>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/login">Log in</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href="/signup">Get Started</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -3,6 +3,8 @@ import type { Metadata } from "next"
 import { Geist, Crimson_Text } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from "@/contexts/AuthContext"
+import { Toaster } from "@/components/ui/sonner"
 import "./globals.css"
 
 const geist = Geist({
@@ -49,7 +51,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geist.variable} ${crimsonText.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
         <Analytics />
       </body>

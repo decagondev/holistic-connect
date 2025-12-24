@@ -1,37 +1,63 @@
 "use client"
 
 import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 import Link from "next/link"
 import { Mail, Lock, Eye, EyeOff, User, CheckCircle2 } from "lucide-react"
+import { useSignUp } from "@/hooks/auth/useSignUp"
+import type { UserRole } from "@/types/auth"
+
+/**
+ * Signup form schema with role selection
+ */
+const signupSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["client", "practitioner"], {
+    required_error: "Please select a role",
+  }),
+  terms: z.boolean().refine((val) => val === true, {
+    message: "You must agree to the terms and conditions",
+  }),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+})
+
+type SignupFormValues = z.infer<typeof signupSchema>
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
+  const { signUp, loading: signUpLoading } = useSignUp()
+
+  const form = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      role: undefined,
+      terms: false,
+    },
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle signup logic here
-    console.log("Signup:", formData)
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
+  const onSubmit = async (values: SignupFormValues) => {
+    await signUp(values.email, values.password, values.name, values.role as UserRole)
   }
 
   return (
@@ -58,134 +84,197 @@ export default function SignUpPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="name"
-                        name="name"
-                        type="text"
-                        placeholder="John Doe"
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Full Name</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type="text"
+                                placeholder="John Doe"
+                                className="pl-10"
+                                disabled={signUpLoading}
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={formData.email}
-                        onChange={handleChange}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type="email"
+                                placeholder="you@example.com"
+                                className="pl-10"
+                                disabled={signUpLoading}
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        name="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Create a password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        className="pl-10 pr-10"
-                        required
-                        minLength={8}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Must be at least 8 characters long
-                    </p>
-                  </div>
+                    <FormField
+                      control={form.control}
+                      name="role"
+                      render={({ field }) => (
+                        <FormItem className="space-y-3">
+                          <FormLabel>I am a...</FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              value={field.value}
+                              className="flex flex-col space-y-1"
+                              disabled={signUpLoading}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="client" id="client" />
+                                <Label htmlFor="client" className="font-normal cursor-pointer">
+                                  Client
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="practitioner" id="practitioner" />
+                                <Label htmlFor="practitioner" className="font-normal cursor-pointer">
+                                  Practitioner
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        className="pl-10 pr-10"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Create a password"
+                                className="pl-10 pr-10"
+                                disabled={signUpLoading}
+                                {...field}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                disabled={signUpLoading}
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                          <p className="text-xs text-muted-foreground">
+                            Must be at least 8 characters long
+                          </p>
+                        </FormItem>
+                      )}
+                    />
 
-                  <div className="space-y-3">
-                    <label className="flex items-start gap-3 cursor-pointer text-sm">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 rounded border-input"
-                        required
-                      />
-                      <span className="text-muted-foreground leading-relaxed">
-                        I agree to the{" "}
-                        <Link href="/terms" className="text-primary hover:underline">
-                          Terms of Service
-                        </Link>{" "}
-                        and{" "}
-                        <Link href="/privacy" className="text-primary hover:underline">
-                          Privacy Policy
-                        </Link>
-                      </span>
-                    </label>
+                    <FormField
+                      control={form.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm Password</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type={showConfirmPassword ? "text" : "password"}
+                                placeholder="Confirm your password"
+                                className="pl-10 pr-10"
+                                disabled={signUpLoading}
+                                {...field}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                disabled={signUpLoading}
+                              >
+                                {showConfirmPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                    <label className="flex items-start gap-3 cursor-pointer text-sm">
-                      <input type="checkbox" className="mt-0.5 rounded border-input" />
-                      <span className="text-muted-foreground leading-relaxed">
-                        I'd like to receive updates and wellness tips via email
-                      </span>
-                    </label>
-                  </div>
+                    <FormField
+                      control={form.control}
+                      name="terms"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <input
+                              type="checkbox"
+                              checked={field.value}
+                              onChange={field.onChange}
+                              className="rounded border-input"
+                              disabled={signUpLoading}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="text-sm font-normal cursor-pointer">
+                              I agree to the{" "}
+                              <Link href="/terms" className="text-primary hover:underline">
+                                Terms of Service
+                              </Link>{" "}
+                              and{" "}
+                              <Link href="/privacy" className="text-primary hover:underline">
+                                Privacy Policy
+                              </Link>
+                            </FormLabel>
+                            <FormMessage />
+                          </div>
+                        </FormItem>
+                      )}
+                    />
 
-                  <Button type="submit" className="w-full" size="lg">
-                    Create account
-                  </Button>
-                </form>
+                    <Button type="submit" className="w-full" size="lg" disabled={signUpLoading}>
+                      {signUpLoading ? "Creating account..." : "Create account"}
+                    </Button>
+                  </form>
+                </Form>
 
                 <div className="mt-6">
                   <Separator />
@@ -223,4 +312,3 @@ export default function SignUpPage() {
     </main>
   )
 }
-
