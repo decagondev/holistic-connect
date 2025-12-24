@@ -16,8 +16,10 @@ import { Badge } from '@/components/ui/badge';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppointments } from '@/hooks/firestore/useAppointments';
-import { Calendar, Clock, Users, Settings, Video } from 'lucide-react';
+import { useUpdateAppointment } from '@/hooks/firestore/useUpdateAppointment';
+import { Calendar, Clock, Users, Settings, Video, CheckCircle2, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import { Timestamp } from 'firebase/firestore';
 import Link from 'next/link';
 
 export default function PractitionerDashboardPage() {
@@ -34,6 +36,7 @@ function PractitionerDashboardContent() {
     practitionerId: user?.uid || undefined,
     realtime: true,
   });
+  const { updateAppointment, loading: updating } = useUpdateAppointment();
 
   // Separate upcoming and past appointments
   const now = new Date();
@@ -42,7 +45,10 @@ function PractitionerDashboardContent() {
     .sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis())
     .slice(0, 5); // Show next 5 appointments
 
-  const pending = appointments.filter((apt) => apt.status === 'pending');
+  // Pending appointments (all pending, regardless of date)
+  const pending = appointments
+    .filter((apt) => apt.status === 'pending')
+    .sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
   const today = appointments.filter(
     (apt) =>
       format(apt.startTime.toDate(), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd') &&
@@ -62,6 +68,18 @@ function PractitionerDashboardContent() {
       default:
         return 'secondary';
     }
+  };
+
+  const handleConfirmAppointment = async (appointmentId: string) => {
+    await updateAppointment(appointmentId, { status: 'confirmed' });
+  };
+
+  const handleCancelAppointment = async (appointmentId: string) => {
+    await updateAppointment(appointmentId, { 
+      status: 'cancelled',
+      cancelledBy: 'practitioner',
+      cancelledAt: Timestamp.now(),
+    });
   };
 
   return (
@@ -133,6 +151,60 @@ function PractitionerDashboardContent() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Pending Requests */}
+            {pending.length > 0 && (
+              <div>
+                <h2 className="text-2xl font-semibold mb-4">Pending Requests</h2>
+                <div className="space-y-4">
+                  {pending.map((appointment) => (
+                    <Card key={appointment.id}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="mb-2">
+                              {format(appointment.startTime.toDate(), 'EEEE, MMMM d, yyyy')}
+                            </CardTitle>
+                            <CardDescription className="flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              {format(appointment.startTime.toDate(), 'h:mm a')} -{' '}
+                              {format(appointment.endTime.toDate(), 'h:mm a')}
+                            </CardDescription>
+                          </div>
+                          <Badge variant={getStatusColor(appointment.status)}>
+                            {appointment.status}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {appointment.notes && (
+                          <p className="text-sm text-muted-foreground">{appointment.notes}</p>
+                        )}
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            onClick={() => handleConfirmAppointment(appointment.id)}
+                            disabled={updating}
+                            className="flex-1"
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Accept
+                          </Button>
+                          <Button
+                            onClick={() => handleCancelAppointment(appointment.id)}
+                            disabled={updating}
+                            variant="outline"
+                            className="flex-1"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Decline
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Upcoming Appointments */}
             <div>

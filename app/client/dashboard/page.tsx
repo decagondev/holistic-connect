@@ -14,11 +14,25 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { RequireAuth } from '@/components/auth/RequireAuth';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppointments } from '@/hooks/firestore/useAppointments';
-import { Calendar, Clock, MapPin, Search, Plus, Video } from 'lucide-react';
+import { useUpdateAppointment } from '@/hooks/firestore/useUpdateAppointment';
+import { Calendar, Clock, MapPin, Search, Plus, Video, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import { Timestamp } from 'firebase/firestore';
 import Link from 'next/link';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function ClientDashboardPage() {
   return (
@@ -34,6 +48,8 @@ function ClientDashboardContent() {
     clientId: user?.uid || undefined,
     realtime: true,
   });
+  const { updateAppointment, loading: updating } = useUpdateAppointment();
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   // Separate upcoming and past appointments
   const now = new Date();
@@ -60,6 +76,17 @@ function ClientDashboardContent() {
       default:
         return 'secondary';
     }
+  };
+
+  const handleCancelAppointment = async (appointmentId: string) => {
+    setCancellingId(appointmentId);
+    const result = await updateAppointment(appointmentId, {
+      status: 'cancelled',
+      cancelledBy: 'client',
+      cancelledAt: Timestamp.now(),
+    });
+    setCancellingId(null);
+    return result;
   };
 
   return (
@@ -176,8 +203,8 @@ function ClientDashboardContent() {
                         {appointment.notes && (
                           <p className="text-sm text-muted-foreground">{appointment.notes}</p>
                         )}
-                        {appointment.meetingLink && appointment.status !== 'cancelled' && (
-                          <div className={appointment.notes ? "pt-2 border-t" : ""}>
+                        <div className={appointment.notes || appointment.meetingLink ? "pt-2 border-t space-y-2" : "space-y-2"}>
+                          {appointment.meetingLink && appointment.status !== 'cancelled' && (
                             <Button
                               asChild
                               variant="outline"
@@ -193,8 +220,41 @@ function ClientDashboardContent() {
                                 {appointment.status === 'confirmed' ? 'Join Video Meeting' : 'View Meeting Link'}
                               </a>
                             </Button>
-                          </div>
-                        )}
+                          )}
+                          {appointment.status !== 'cancelled' && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="w-full"
+                                  disabled={updating && cancellingId === appointment.id}
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Cancel Appointment
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Cancel Appointment?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to cancel this appointment? This action cannot be undone.
+                                    The practitioner will be notified of the cancellation.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleCancelAppointment(appointment.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Yes, Cancel Appointment
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

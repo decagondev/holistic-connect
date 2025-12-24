@@ -67,15 +67,12 @@ export function middleware(request: NextRequest) {
   // 2. Store auth tokens in httpOnly cookies
   // 3. Verify tokens in middleware using Admin SDK
   //
-  // For now, we redirect to login if accessing protected routes.
-  // The RequireAuth component will handle the actual auth check.
+  // For now, we allow protected routes through and let RequireAuth
+  // component handle the actual auth check and redirect.
   
   if (isProtectedRoute(pathname)) {
-    // Redirect to login if accessing protected route
-    // The RequireAuth component will handle re-authentication
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+    // Allow the route through - RequireAuth component will handle authentication
+    return NextResponse.next();
   }
 
   return NextResponse.next();

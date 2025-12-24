@@ -20,7 +20,7 @@ import { LogOut, User as UserIcon, Settings } from "lucide-react"
 
 export function Header() {
   const pathname = usePathname()
-  const { user, loading } = useAuth()
+  const { user, loading, role } = useAuth()
   const { signOut, loading: signOutLoading } = useSignOut()
 
   const isActiveLink = (href: string) => {
@@ -141,7 +141,10 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/settings" className="flex items-center">
+                    <Link 
+                      href={role === 'practitioner' ? '/practitioner/settings' : '/client/settings'} 
+                      className="flex items-center"
+                    >
                       <Settings className="mr-2 h-4 w-4" />
                       <span>Settings</span>
                     </Link>
