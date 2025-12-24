@@ -143,40 +143,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const appUser = firebaseUser as AppUser;
         setUser(appUser);
         
-        // Fetch role from Firestore user document
-        try {
-          const userDoc = await userRepository.getUser(firebaseUser.uid);
-          if (userDoc) {
-            // If user has a role, use it; otherwise default to 'client' for legacy users
-            if (userDoc.role) {
-              setRole(userDoc.role);
-            } else {
-              // Legacy user without role - default to 'client' and update document
-              setRole('client');
-              // Try to update the user document with default role (don't fail if this fails)
-              try {
+        // Set default role immediately (don't block on Firestore)
+        setRole('client');
+        
+        // Fetch role from Firestore user document in the background
+        // This won't block the UI - we default to 'client' and update if needed
+        userRepository.getUser(firebaseUser.uid)
+          .then((userDoc) => {
+            if (userDoc) {
+              // If user has a role, use it; otherwise keep default 'client'
+              if (userDoc.role) {
+                setRole(userDoc.role);
+              } else {
+                // Legacy user without role - try to update document (non-blocking)
                 const userRef = doc(db, 'users', firebaseUser.uid);
-                await updateDoc(userRef, { role: 'client' });
-              } catch (updateError) {
-                console.warn('Failed to update legacy user role:', updateError);
-                // Continue anyway - role is set in state
+                updateDoc(userRef, { role: 'client' }).catch((updateError) => {
+                  console.warn('Failed to update legacy user role:', updateError);
+                });
               }
             }
-          } else {
-            // If no user document exists, default to 'client' (shouldn't happen after sign-in)
-            setRole('client');
-          }
-        } catch (error: any) {
-          // Handle offline errors gracefully
-          if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
-            console.warn('Firestore is offline, defaulting to client role');
-            setRole('client');
-          } else {
-            console.error('Failed to fetch user role from Firestore:', error);
-            // Default to 'client' on error to prevent blocking the user
-            setRole('client');
-          }
-        }
+          })
+          .catch((error: any) => {
+            // Handle offline errors gracefully - role already set to 'client' by default
+            if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
+              console.warn('Firestore is offline, using default client role');
+            } else {
+              console.warn('Failed to fetch user role from Firestore (non-blocking):', error);
+            }
+            // Role is already set to 'client' by default, so no action needed
+          });
       } else {
         setUser(null);
         setRole(null);
@@ -215,4 +210,5 @@ export function useAuth() {
   }
   return context;
 }
+
 

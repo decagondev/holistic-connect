@@ -56,27 +56,7 @@ export function useSignInWithGoogle(): UseSignInWithGoogleReturn {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user document exists in Firestore, create if it doesn't
-      try {
-        const userExists = await userRepository.userExists(user.uid);
-        
-        if (!userExists) {
-          // Create user profile with default 'client' role for Google sign-in
-          await userRepository.createUserProfile({
-            uid: user.uid,
-            email: user.email!,
-            role: 'client', // Default to client role for Google sign-in
-            displayName: user.displayName || null,
-            photoURL: user.photoURL || null,
-            emailVerified: user.emailVerified,
-          });
-        }
-      } catch (profileError) {
-        // Log error but don't fail sign-in if profile creation fails
-        console.error('Failed to create/check user profile:', profileError);
-        toast.warning('Signed in, but profile setup encountered an issue. Please complete your profile later.');
-      }
-
+      // Redirect immediately - don't wait for Firestore operations
       toast.success('Signed in with Google successfully');
       
       // Check for redirect parameter in URL
@@ -84,25 +64,34 @@ export function useSignInWithGoogle(): UseSignInWithGoogleReturn {
         ? new URLSearchParams(window.location.search).get('redirect')
         : null;
       
-      // If redirect param exists, use it; otherwise redirect based on role
+      // Redirect immediately to dashboard (don't wait for Firestore)
       if (redirectParam) {
         router.push(redirectParam);
       } else {
-        // Fetch user role to determine dashboard
-        try {
-          const userDoc = await userRepository.getUser(user.uid);
-          // Redirect to general dashboard which will route based on role
-          router.push('/dashboard');
-        } catch (error: any) {
-          // Handle offline errors or other errors - default to client dashboard
-          if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
-            console.warn('Firestore is offline, redirecting to client dashboard');
-          } else {
-            console.error('Failed to fetch user role:', error);
-          }
-          router.push('/client/dashboard');
-        }
+        router.push('/dashboard');
       }
+
+      // Handle Firestore operations in the background (don't block redirect)
+      // This will be handled by AuthContext, but we can also try to create profile here
+      // if it doesn't exist, without blocking the user
+      userRepository.userExists(user.uid)
+        .then((exists) => {
+          if (!exists) {
+            // Create user profile with default 'client' role for Google sign-in
+            return userRepository.createUserProfile({
+              uid: user.uid,
+              email: user.email!,
+              role: 'client', // Default to client role for Google sign-in
+              displayName: user.displayName || null,
+              photoURL: user.photoURL || null,
+              emailVerified: user.emailVerified,
+            });
+          }
+        })
+        .catch((profileError) => {
+          // Log error but don't show to user - AuthContext will handle it
+          console.warn('Background profile creation failed (non-blocking):', profileError);
+        });
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       let errorMessage = 'Failed to sign in with Google. Please try again.';
